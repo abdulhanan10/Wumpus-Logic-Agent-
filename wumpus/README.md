@@ -1,4 +1,4 @@
-# Wumpus Logic Agent — AI 2002 Assignment 6
+# Wumpus Logic Agent 
 
 A Python Flask web application implementing a Knowledge-Based Agent that navigates the Wumpus World using Propositional Logic and Resolution Refutation.
 
