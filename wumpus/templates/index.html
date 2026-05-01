@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Wumpus Logic Agent — AI 2002</title>
+  <style>
+    /* ── RESET & BASE ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #080d1a;
+      --panel:    #0e1525;
+      --border:   #1c2a40;
+      --accent:   #00d4ff;
+      --accent2:  #0891b2;
+      --safe:     #052e16;
+      --safe-t:   #4ade80;
+      --danger:   #450a0a;
+      --danger-t: #f87171;
+      --warn:     #1c1400;
+      --warn-t:   #fbbf24;
+      --visited:  #0f1e38;
+      --visited-t:#60a5fa;
+      --dim:      #475569;
+      --text:     #e2e8f0;
+      --success:  #052e16;
+      --success-t:#34d399;
+      --font:     'Courier New', Courier, monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    /* ── HEADER ── */
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    header h1 {
+      font-size: clamp(16px, 3vw, 24px);
+      color: var(--accent);
+      letter-spacing: 3px;
+      text-shadow: 0 0 24px #00d4ff55;
+    }
+    header p {
+      color: var(--dim);
+      font-size: 11px;
+      margin-top: 4px;
+      letter-spacing: 1px;
+    }
+
+    /* ── CONTROL BAR ── */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+    .ctrl-group label { color: var(--dim); }
+    input[type=number], select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-family: var(--font);
+      font-size: 12px;
+      width: 56px;
+    }
+    select { width: auto; }
+
+    .btn {
+      border: none;
+      border-radius: 5px;
+      padding: 6px 14px;
+      font-family: var(--font);
+      font-size: 12px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      transition: all .2s;
+    }
+    .btn:hover { filter: brightness(1.2); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-new   { background: #1e293b; color: var(--text);    border: 1px solid var(--border); }
+    .btn-run   { background: #0c2a3e; color: var(--accent);  border: 1px solid var(--accent2); }
+    .btn-pause { background: #3b0f0f; color: var(--danger-t);border: 1px solid var(--danger-t); }
+    .btn-step  { background: #0f1e38; color: var(--visited-t);border: 1px solid #2a4a7f; }
+    .btn-reveal{ background: #1a1400; color: var(--warn-t);  border: 1px solid #a16207; }
+
+    /* ── BANNER ── */
+    #banner {
+      display: none;
+      padding: 10px;
+      border-radius: 6px;
+      text-align: center;
+      font-weight: bold;
+      font-size: 13px;
+      letter-spacing: 1px;
+      margin-bottom: 14px;
+    }
+
+    /* ── MAIN LAYOUT ── */
+    .main {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* ── GRID ── */
+    #grid-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      flex: 0 0 auto;
+    }
+    #grid {
+      display: grid;
+      gap: 4px;
+    }
+    .cell {
+      border-radius: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: background .25s, box-shadow .25s;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      cursor: default;
+      user-select: none;
+    }
+    .cell .emoji  { font-size: 1.4em; line-height: 1; }
+    .cell .coords {
+      position: absolute;
+      bottom: 2px; right: 3px;
+      font-size: 8px;
+      color: var(--dim);
+      opacity: .7;
+    }
+    .cell.agent   { background: var(--visited); border-color: var(--accent); box-shadow: 0 0 14px #00d4ff55; }
+    .cell.visited { background: var(--visited); border-color: #1e3a5f; }
+    .cell.safe-inf{ background: var(--safe);    border-color: #16a34a55; }
+    .cell.danger  { background: var(--danger);  border-color: #991b1b55; }
+    .cell.pit-rev { background: #1a0505;        border-color: var(--danger-t); }
+    .cell.wump-rev{ background: #1a0d00;        border-color: var(--warn-t); }
+    .cell.gold-rev{ background: #1a1400;        border-color: var(--warn-t); }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+      font-size: 10px;
+    }
+    .legend span { display: flex; align-items: center; gap: 3px; }
+
+    /* ── RIGHT PANEL ── */
+    .right-panel {
+      flex: 1 1 260px;
+      min-width: 230px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .card-title {
+      color: var(--accent);
+      font-size: 10px;
+      letter-spacing: 2px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    /* Metrics grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+    .metric {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 7px 9px;
+    }
+    .metric.full { grid-column: 1/-1; }
+    .metric .mk  { font-size: 9px; color: var(--dim); margin-bottom: 2px; }
+    .metric .mv  { font-size: 13px; font-weight: bold; color: var(--accent); }
+
+    /* Resolution steps */
+    #res-steps-wrap { display: none; }
+    .res-step {
+      font-size: 9px;
+      color: var(--dim);
+      padding: 3px 0;
+      border-bottom: 1px solid var(--border);
+      line-height: 1.6;
+    }
+    .res-step .res-result { color: var(--accent); }
+    .res-step .res-empty  { color: var(--danger-t); font-weight: bold; }
+
+    /* Log */
+    #log-box {
+      max-height: 160px;
+      overflow-y: auto;
+      font-size: 9px;
+      line-height: 1.7;
+    }
+    .log-tell    { color: var(--safe-t); }
+    .log-ask     { color: var(--accent); }
+    .log-step    { color: var(--visited-t); }
+    .log-death   { color: var(--danger-t); font-weight: bold; }
+    .log-win     { color: var(--success-t); font-weight: bold; }
+    .log-default { color: var(--dim); }
+
+    /* KB clauses */
+    #kb-box {
+      max-height: 140px;
+      overflow-y: auto;
+      font-size: 8.5px;
+      color: var(--dim);
+      line-height: 1.7;
+    }
+
+    /* Path */
+    #path-box {
+      font-size: 10px;
+      color: var(--dim);
+      word-break: break-all;
+      line-height: 1.8;
+      max-height: 60px;
+      overflow-y: auto;
+    }
+
+    /* Collapsible toggle */
+    .toggle-btn {
+      background: transparent;
+      border: none;
+      color: var(--accent);
+      font-family: var(--font);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      padding: 0;
+      margin-bottom: 6px;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      body { padding: 10px; }
+      header h1 { font-size: 15px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ WUMPUS LOGIC AGENT</h1>
+  <p>Knowledge-Based Agent · Propositional Resolution · CNF Inference Engine · AI 2002</p>
+</header>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Rows</label>
+    <input type="number" id="inp-rows" min="3" max="7" value="4"/>
+  </div>
+  <div class="ctrl-group">
+    <label>Cols</label>
+    <input type="number" id="inp-cols" min="3" max="7" value="4"/>
+  </div>
+  <div class="ctrl-group">
+    <label>Speed</label>
+    <select id="inp-speed">
+      <option value="1200">Slow</option>
+      <option value="700" selected>Medium</option>
+      <option value="350">Fast</option>
+      <option value="100">Turbo</option>
+    </select>
+  </div>
+  <button class="btn btn-new"    onclick="newGame()">🔄 New Game</button>
+  <button class="btn btn-run"    id="btn-run"   onclick="toggleRun()">▶ Auto Run</button>
+  <button class="btn btn-step"   id="btn-step"  onclick="doStep()">⏭ Step</button>
+  <button class="btn btn-reveal" id="btn-reveal" onclick="revealWorld()">👁 Reveal</button>
+</div>
+
+<!-- BANNER -->
+<div id="banner"></div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- GRID -->
+  <div id="grid-wrap">
+    <div id="grid"></div>
+    <div class="legend">
+      <span style="color:var(--accent)">🤖 Agent</span>
+      <span style="color:var(--safe-t)">✓ Inferred Safe</span>
+      <span style="color:var(--danger-t)">⚠ Danger</span>
+      <span style="color:var(--dim)">? Unknown</span>
+      <span style="color:var(--danger-t)">🕳️ Pit</span>
+      <span style="color:var(--warn-t)">👹 Wumpus</span>
+      <span style="color:var(--warn-t)">💰 Gold</span>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <!-- Metrics -->
+    <div class="card">
+      <div class="card-title">📊 METRICS DASHBOARD</div>
+      <div class="metrics-grid">
+        <div class="metric"><div class="mk">Position</div><div class="mv" id="m-pos">—</div></div>
+        <div class="metric"><div class="mk">Steps Taken</div><div class="mv" id="m-steps">0</div></div>
+        <div class="metric"><div class="mk">Cells Visited</div><div class="mv" id="m-visited">0</div></div>
+        <div class="metric"><div class="mk">Inference Steps</div><div class="mv" id="m-inf">0</div></div>
+        <div class="metric"><div class="mk">KB Clauses</div><div class="mv" id="m-clauses">0</div></div>
+        <div class="metric"><div class="mk">Agent Status</div><div class="mv" id="m-status">✅ ALIVE</div></div>
+        <div class="metric full"><div class="mk">Current Percepts</div><div class="mv" id="m-percepts">None</div></div>
+      </div>
+    </div>
+
+    <!-- Resolution Steps -->
+    <div class="card">
+      <button class="toggle-btn" onclick="toggleSection('res-steps-wrap', this)">▶ LAST RESOLUTION STEPS</button>
+      <div id="res-steps-wrap">
+        <div id="res-steps-box" style="max-height:150px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- KB Log -->
+    <div class="card">
+      <button class="toggle-btn" onclick="toggleSection('log-section', this)">▶ KB INFERENCE LOG</button>
+      <div id="log-section" style="display:none;">
+        <div id="log-box"></div>
+      </div>
+    </div>
+
+    <!-- KB Clauses -->
+    <div class="card">
+      <button class="toggle-btn" onclick="toggleSection('kb-section', this)">▶ CNF CLAUSES IN KB</button>
+      <div id="kb-section" style="display:none;">
+        <div id="kb-box"></div>
+      </div>
+    </div>
+
+    <!-- Agent Path -->
+    <div class="card">
+      <div class="card-title">🗺 AGENT PATH</div>
+      <div id="path-box">—</div>
+    </div>
+
+    <!-- Algorithm Info -->
+    <div class="card">
+      <div class="card-title">🔬 RESOLUTION ENGINE</div>
+      <div style="font-size:10px;color:var(--dim);line-height:1.9;">
+        <div>• KB stored as CNF clauses</div>
+        <div>• TELL: percepts → unit clauses</div>
+        <div>• Biconditional: B⟺(P₁∨P₂∨...)</div>
+        <div>• ASK: refutation — assume ¬goal</div>
+        <div>• Derive ⊥ to prove safety</div>
+        <div>• No breeze → all adj. cells pit-free</div>
+        <div>• No stench → all adj. wumpus-free</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+let gameId   = null;
+let state    = null;
+let running  = false;
+let timer    = null;
+let gameOver = false;
+let lastResSteps = [];
+
+// ─────────────────────────────────────────────
+//  API CALLS
+// ─────────────────────────────────────────────
+async function apiPost(url, body) {
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+async function newGame() {
+  stopRun();
+  gameOver = false;
+  hideBanner();
+  const rows = +document.getElementById("inp-rows").value;
+  const cols = +document.getElementById("inp-cols").value;
+  const data = await apiPost("/api/new_game", { rows, cols });
+  gameId = data.game_id;
+  state  = data;
+  lastResSteps = [];
+  renderState();
+  setButtonStates(false);
+}
+
+async function doStep() {
+  if (!gameId || gameOver) return;
+  const data = await apiPost("/api/step", { game_id: gameId });
+  state = data;
+  renderState();
+  checkGameOver();
+}
+
+async function revealWorld() {
+  if (!gameId) return;
+  const data = await apiPost("/api/reveal", { game_id: gameId });
+  state = data;
+  renderGrid(state);
+}
+
+// ─────────────────────────────────────────────
+//  AUTO RUN
+// ─────────────────────────────────────────────
+function toggleRun() {
+  if (gameOver || !gameId) return;
+  running ? stopRun() : startRun();
+}
+
+function startRun() {
+  if (gameOver) return;
+  running = true;
+  document.getElementById("btn-run").textContent  = "⏸ Pause";
+  document.getElementById("btn-run").className    = "btn btn-pause";
+  const speed = +document.getElementById("inp-speed").value;
+  timer = setInterval(async () => {
+    if (!running || gameOver) { stopRun(); return; }
+    await doStep();
+  }, speed);
+}
+
+function stopRun() {
+  running = false;
+  clearInterval(timer);
+  document.getElementById("btn-run").textContent = "▶ Auto Run";
+  document.getElementById("btn-run").className   = "btn btn-run";
+}
+
+function setButtonStates(over) {
+  document.getElementById("btn-run").disabled   = over;
+  document.getElementById("btn-step").disabled  = over;
+}
+
+// ─────────────────────────────────────────────
+//  RENDER
+// ─────────────────────────────────────────────
+function renderState() {
+  if (!state) return;
+  renderGrid(state);
+  renderMetrics(state);
+  renderLog(state);
+  renderKB(state);
+  renderPath(state);
+}
+
+function renderGrid(s) {
+  if (!s) return;
+  const agent  = s.agent;
+  const world  = s.world;
+  const rows   = world.rows;
+  const cols   = world.cols;
+  const status = agent.cell_status || {};
+  const visited= new Set(agent.visited || []);
+
+  // Known revealed info
+  const pitSet   = new Set(world.pits || []);
+  const wumpus   = world.wumpus;   // [r,c] or null
+  const gold     = world.gold;     // [r,c] or null
+
+  const wrap = document.getElementById("grid-wrap");
+  const maxDim = Math.max(rows, cols);
+  const cellSz = Math.max(56, Math.min(90, Math.floor(360 / maxDim)));
+
+  const grid = document.getElementById("grid");
+  grid.style.gridTemplateColumns = `repeat(${cols}, ${cellSz}px)`;
+  grid.innerHTML = "";
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cid   = `${r}_${c}`;
+      const isAgt = agent.r === r && agent.c === c;
+      const isVis = visited.has(cid);
+      const st    = status[cid];
+      const hasPit   = pitSet.has(cid);
+      const hasWumpus= wumpus && wumpus[0]===r && wumpus[1]===c;
+      const hasGold  = gold   && gold[0]===r   && gold[1]===c;
+
+      const div = document.createElement("div");
+      div.className = "cell";
+      div.style.width  = cellSz + "px";
+      div.style.height = cellSz + "px";
+      div.style.fontSize = (cellSz > 72 ? 22 : 16) + "px";
+
+      // Classify cell
+      if (isAgt)          div.classList.add("agent");
+      else if (hasPit)    div.classList.add("pit-rev");
+      else if (hasWumpus) div.classList.add("wump-rev");
+      else if (hasGold)   div.classList.add("gold-rev");
+      else if (isVis)     div.classList.add("visited");
+      else if (st === "safe")   div.classList.add("safe-inf");
+      else if (st === "danger") div.classList.add("danger");
+
+      // Emoji
+      let emoji = "";
+      if (isAgt)          emoji = "🤖";
+      else if (hasPit)    emoji = "🕳️";
+      else if (hasWumpus) emoji = "👹";
+      else if (hasGold)   emoji = "💰";
+      else if (!isVis) {
+        if (st === "safe")   emoji = "✓";
+        else if (st === "danger") emoji = "⚠️";
+        else                 emoji = "?";
+      }
+
+      div.innerHTML = `<span class="emoji">${emoji}</span>
+                       <span class="coords">${r},${c}</span>`;
+      grid.appendChild(div);
+    }
+  }
+}
+
+function renderMetrics(s) {
+  const a  = s.agent;
+  const kb = s.kb;
+  setText("m-pos",      `[${a.r}, ${a.c}]`);
+  setText("m-steps",    a.step_count);
+  setText("m-visited",  (a.visited || []).length);
+  setText("m-inf",      kb.total_inferences);
+  setText("m-clauses",  kb.clauses.length);
+  setText("m-percepts", a.current_percepts || "None");
+
+  const statusEl = document.getElementById("m-status");
+  if (!a.alive)    { statusEl.textContent = "💀 DEAD";  statusEl.style.color = "var(--danger-t)"; }
+  else if (a.won)  { statusEl.textContent = "🏆 WON";   statusEl.style.color = "var(--success-t)"; }
+  else if (a.stuck){ statusEl.textContent = "🔒 STUCK"; statusEl.style.color = "var(--warn-t)"; }
+  else             { statusEl.textContent = "✅ ALIVE";  statusEl.style.color = "var(--safe-t)"; }
+}
+
+function renderLog(s) {
+  const box  = document.getElementById("log-box");
+  const logs = [...(s.agent.agent_log || []), ...(s.kb.log || [])];
+  box.innerHTML = logs.slice(-60).map(e => {
+    let cls = "log-default";
+    if (e.startsWith("TELL"))   cls = "log-tell";
+    else if (e.startsWith("ASK")) cls = "log-ask";
+    else if (e.startsWith("Step")) cls = "log-step";
+    else if (e.includes("💀"))  cls = "log-death";
+    else if (e.includes("🏆"))  cls = "log-win";
+    return `<div class="${cls}">${escHtml(e)}</div>`;
+  }).join("");
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderKB(s) {
+  const box = document.getElementById("kb-box");
+  const clauses = s.kb.clauses || [];
+  box.innerHTML = clauses.map((c, i) =>
+    `<div>[${i+1}] ${escHtml(c)}</div>`
+  ).join("");
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderPath(s) {
+  const box = document.getElementById("path-box");
+  const path = s.agent.path || [];
+  box.textContent = path.map(([r,c]) => `[${r},${c}]`).join(" → ") || "—";
+  box.scrollTop = box.scrollHeight;
+}
+
+// ─────────────────────────────────────────────
+//  GAME OVER CHECK
+// ─────────────────────────────────────────────
+function checkGameOver() {
+  if (!state) return;
+  const a = state.agent;
+  if (!a.alive || a.won || a.stuck) {
+    gameOver = true;
+    stopRun();
+    setButtonStates(true);
+    document.getElementById("btn-reveal").disabled = false;
+    if (!a.alive)  showBanner("💀 AGENT DIED — WORLD REVEALED", "var(--danger)", "var(--danger-t)");
+    else if (a.won) showBanner("🏆 GOLD FOUND — MISSION COMPLETE!", "var(--success)", "var(--success-t)");
+    else if (a.stuck) showBanner("🔒 AGENT STUCK — NO SAFE MOVES FOUND", "var(--warn)", "var(--warn-t)");
+    revealWorld();
+  }
+}
+
+// ─────────────────────────────────────────────
+//  BANNER
+// ─────────────────────────────────────────────
+function showBanner(msg, bg, col) {
+  const b = document.getElementById("banner");
+  b.textContent = msg;
+  b.style.display = "block";
+  b.style.background = bg;
+  b.style.color = col;
+  b.style.border = `1px solid ${col}`;
+}
+function hideBanner() {
+  document.getElementById("banner").style.display = "none";
+}
+
+// ─────────────────────────────────────────────
+//  COLLAPSIBLE
+// ─────────────────────────────────────────────
+function toggleSection(id, btn) {
+  const el = document.getElementById(id);
+  const shown = el.style.display !== "none";
+  el.style.display = shown ? "none" : "block";
+  btn.textContent = btn.textContent.replace(/[▶▼]/, shown ? "▶" : "▼");
+}
+
+// ─────────────────────────────────────────────
+//  UTILITIES
+// ─────────────────────────────────────────────
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;");
+}
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+window.onload = () => newGame();
+</script>
+</body>
+</html>
